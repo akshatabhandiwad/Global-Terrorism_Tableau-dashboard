@@ -1,0 +1,208 @@
+---
+title: "6380 Data Cleaning"
+author: "Group 4"
+date: "3/5/2021"
+output: pdf_document
+---
+
+# Loading packages
+```{r loadPackages, warning = FALSE, message = FALSE, results ='hide' }
+
+if(!require("pacman")) install.packages("pacman")
+pacman::p_load(dplyr, data.table)
+
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+# Reading the data
+```{r Data, warning = FALSE, message = FALSE}
+
+terrorism <- data.table(fread ("Raw_data_Global Terrorism.csv"))
+#summary(terrorism)
+```
+
+# Proportion of missing values
+```{r missing values, warning = FALSE, message = FALSE}
+
+# sum of all NA values
+missvaltotal <- data.frame(value = colSums(is.na(terrorism)))
+
+#calculating the percentage of missing values
+missvaltotal$Proportion_Missing <- (missvaltotal$value/nrow(terrorism)*100)
+
+#missing value columns with proportion
+missval.var <- missvaltotal[missvaltotal$value > 0, ]
+missval.var
+
+```
+
+
+# Data cleaning
+```{r data, warning = FALSE, message = FALSE}
+
+options(scipen = 99)
+
+#removing with no month
+terrorism <- terrorism[terrorism$imonth != 0,]
+
+#removing with no date
+terrorism <- terrorism[terrorism$iday != 0,]
+
+# Introducing Date column
+terrorism$approxdate <- paste0(terrorism$iyear,"-",terrorism$imonth,"-", terrorism$iday)
+terrorism$approxdate <- as.POSIXct(terrorism$approxdate)
+names(terrorism)[names(terrorism) == "approxdate"] <- "Date"
+terrorism <- terrorism[,-c("iyear","imonth","iday")]
+
+# Removing extended incidents columns
+terrorism <- terrorism[,-c("extended", "resolution")]
+
+# Removing the country and region code 
+terrorism <- terrorism[,-c("country", "region")]
+
+# Renaming country_txt and region_txt
+names(terrorism)[names(terrorism) == "country_txt"] <- "Country"
+names(terrorism)[names(terrorism) == "region_txt"] <- "Region"
+
+# removing with no province/state and city
+terrorism <- terrorism[terrorism$provstate != ""]
+terrorism <- terrorism[terrorism$city != ""]
+
+
+# removing records with no lat and long info
+terrorism <- terrorism[!is.na(terrorism$latitude)]
+terrorism <- terrorism[!is.na(terrorism$longitude)]
+
+# Removing specificity, vicinity and other columns
+terrorism <- terrorism[,-c("specificity", "vicinity", "location", "summary")]
+
+# Removing columns with inclusion criterias
+terrorism <- terrorism[,-c("crit1", "crit2", "crit3")]
+
+# Removing records of doubtful terrorism acts - filtering only terrorist incidents
+terrorism <- terrorism[terrorism$doubtterr == 0]
+terrorism <- terrorism[,-c("doubtterr")]
+
+# dropping alternative designation (used only with doubtful terrorist attacks)
+terrorism <- terrorism[,-c("alternative", "alternative_txt")]
+
+# removing records with no multiple, success, suicide
+terrorism <- terrorism[!is.na(terrorism$multiple)]
+terrorism <- terrorism[!is.na(terrorism$success)]
+terrorism <- terrorism[!is.na(terrorism$suicide)]
+
+
+# considering only the first attack as attack type
+terrorism <- terrorism[,-c("attacktype1", "attacktype2", "attacktype3", "attacktype2_txt", "attacktype3_txt")]
+names(terrorism)[names(terrorism) == "attacktype1_txt"] <- "Attack Type"
+
+
+# considering only the first target as target type and removing subtypes and other details
+terrorism <- terrorism[,-c("targtype1", "targsubtype1", "targsubtype1_txt", "corp1", "target1", "natlty1", "natlty1_txt",
+                           "targtype2", "targtype2_txt", "targsubtype2", "targsubtype2_txt", "corp2", "target2", "natlty2",
+                           "natlty2_txt", "targtype3", "targtype3_txt", "targsubtype3", "targsubtype3_txt", "corp3", "target3",
+                           "natlty3","natlty3_txt")]
+names(terrorism)[names(terrorism) == "targtype1_txt"] <- "Target Type"
+
+
+# considering only the first Perpetrator Group Name as Perp.Group Name and removing other details
+terrorism <- terrorism[,-c("gsubname", "gname2", "gsubname2", "gname3", "gsubname3", "guncertain1", "guncertain2", "guncertain3",
+                           "individual", "nperps", "nperpcap")]
+names(terrorism)[names(terrorism) == "gname"] <- "Perp.Group Name"
+
+
+
+# Removing the motive description
+terrorism <- terrorism[,-c("motive")]
+
+
+# Assuming NA of claim to be "Not Claimed"
+terrorism$claimed <- ifelse(is.na(terrorism$claimed), 0, terrorism$claimed)
+
+# Assuming NA of claim mode to be "Unknown"
+terrorism <- terrorism[,-c("claimmode", "claim2","claimmode2", "claimmode2_txt", "claim3", "claimmode3",
+                           "claimmode3_txt", "compclaim")]                          
+terrorism$claimmode_txt <- ifelse(terrorism$claimmode_txt == "", "Unknown", terrorism$claimmode_txt)
+names(terrorism)[names(terrorism) == "claimmode_txt"] <- "Claim Mode"
+
+
+
+# considering only the first weapon type as Weapon Type and removing other details
+terrorism <- terrorism[,-c("weaptype1", "weapsubtype1", "weapsubtype1_txt", "weaptype2", "weaptype2_txt", "weapsubtype2",
+                           "weapsubtype2_txt","weaptype3", "weaptype3_txt", "weapsubtype3","weapsubtype3_txt", "weaptype4",
+                           "weaptype4_txt", "weapsubtype4","weapsubtype4_txt", "weapdetail")] 
+terrorism$weaptype1_txt <- ifelse(terrorism$weaptype1_txt == "", "Unknown", terrorism$weaptype1_txt)
+names(terrorism)[names(terrorism) == "weaptype1_txt"] <- "Weapon Type"
+
+
+# removing nkillter column - already counted in nkill
+terrorism <- terrorism[,-c("nkillter")] 
+
+#  Assuming NA of nkill and nkillus to be "0"
+terrorism$nkill <- ifelse(is.na(terrorism$nkill), 0, terrorism$nkill)
+terrorism$nkillus <- ifelse(is.na(terrorism$nkillus), 0, terrorism$nkillus)
+
+
+# removing nwoundte column - already counted in nwound
+terrorism <- terrorism[,-c("nwoundte")] 
+
+#  Assuming NA of nwound and nwoundus to be "0"
+terrorism$nwound <- ifelse(is.na(terrorism$nwound), 0, terrorism$nwound)
+terrorism$nwoundus <- ifelse(is.na(terrorism$nwoundus), 0, terrorism$nwoundus)
+
+
+# Removing property -- covered in propextent_txt
+terrorism <- terrorism[,-c("property", "propextent")] 
+
+# Assuming NA of propextent_txt to be "Unknown"
+terrorism$propextent_txt <- ifelse(terrorism$propextent_txt == "", "Unknown", terrorism$propextent_txt)
+names(terrorism)[names(terrorism) == "propextent_txt"] <- "Property Damage"
+
+
+# Dropping contradicting records -- prop damage unknown by there is value in provalue
+terrorism <- terrorism[!(terrorism$eventid == 198307250010 | 
+                           terrorism$eventid == 199904150004 | 
+                           terrorism$eventid == 200812100007),]
+
+
+# Imputing median propvalue                                     
+terrorism$propvalue <- ifelse(terrorism$propvalue == -99, "", terrorism$propvalue)
+terrorism$propvalue <- as.numeric(terrorism$propvalue)
+
+median.val <- data.table(terrorism %>% group_by(`Property Damage`) %>% summarise(Median = median(propvalue, na.rm = TRUE)))
+
+terrorism$propvalue[is.na(terrorism$propvalue)&terrorism$`Property Damage`=="Catastrophic (likely >= $1 billion)"] <- 
+                                                                                                as.numeric(median.val[1,2])
+terrorism$propvalue[is.na(terrorism$propvalue)&terrorism$`Property Damage`=="Major (likely >= $1 million but < $1 billion)"] <-                                                                                                         as.numeric(median.val[2,2])
+terrorism$propvalue[is.na(terrorism$propvalue)&terrorism$`Property Damage`=="Minor (likely < $1 million)"] <-                                                                                                         as.numeric(median.val[3,2])
+terrorism$propvalue[is.na(terrorism$propvalue)&terrorism$`Property Damage`=="Unknown"] <- as.numeric(median.val[4,2])
+
+
+# Dropping propcomment -- covered in propvalue and Property Damage
+terrorism <- terrorism[,-c("propcomment")]
+
+# Dropping all kidnapping details
+terrorism <- terrorism[,-c("ishostkid", "nhostkid", "nhostkidus","nhours","ndays", "divert","kidhijcountry",
+                           "ransom", "ransomamt", "ransomamtus", "ransompaid", "ransompaidus", "ransomnote",
+                           "hostkidoutcome", "hostkidoutcome_txt", "nreleased", "addnotes")]
+
+
+# Dropping citation details
+terrorism <- terrorism[,-c("scite1", "scite2", "scite3","dbsource")]
+
+
+# Assuming "0" Unknown to be 0 for international attacks and dropping other column with same info
+terrorism$INT_ANY <- ifelse(terrorism$INT_ANY == -9, 0, terrorism$INT_ANY)
+names(terrorism)[names(terrorism) == "INT_ANY"] <- "International Attack"
+terrorism <- terrorism[,-c("INT_LOG", "INT_IDEO", "INT_MISC")]
+
+
+#cleaned data
+write.csv(terrorism, "terrorism_cleaned.csv", row.names = FALSE)
+```
+
+
+
+
+
